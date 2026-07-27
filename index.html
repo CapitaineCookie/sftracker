@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SF6 Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0e0e0e;
+      color: #f0f0f0;
+      font-family: 'Segoe UI', sans-serif;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
+    .cards { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      min-width: 160px;
+    }
+    .card .label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.6rem; font-weight: bold; margin-top: 0.25rem; }
+    .card .value.green { color: #4ade80; }
+    .card .value.red { color: #f87171; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid #2a2a2a;
+      color: #888;
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+    }
+    td {
+      padding: 0.55rem 0.75rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    tr:hover td { background: #1a1a1a; }
+    .win { color: #4ade80; font-weight: 600; }
+    .loss { color: #f87171; font-weight: 600; }
+    .gain-pos { color: #4ade80; }
+    .gain-neg { color: #f87171; }
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      color: #ccc;
+    }
+    .section { margin-bottom: 2.5rem; }
+    #last-updated { font-size: 0.8rem; color: #555; margin-bottom: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>SF6 Tracker</h1>
+  <p class="subtitle">Tracking: <strong id="player-name">—</strong></p>
+  <p id="last-updated">Last updated: —</p>
+
+  <div class="section">
+    <div class="section-title">Overview</div>
+    <div class="cards">
+      <div class="card"><div class="label">Total Matches</div><div class="value" id="stat-total">—</div></div>
+      <div class="card"><div class="label">Wins</div><div class="value green" id="stat-wins">—</div></div>
+      <div class="card"><div class="label">Losses</div><div class="value red" id="stat-losses">—</div></div>
+      <div class="card"><div class="label">Win Rate</div><div class="value" id="stat-winrate">—</div></div>
+      <div class="card"><div class="label">Current LP</div><div class="value" id="stat-lp">—</div></div>
+      <div class="card"><div class="label">Current MR</div><div class="value" id="stat-mr">—</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Recent Matches</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Result</th>
+          <th>Character</th>
+          <th>Opponent</th>
+          <th>Opp. Character</th>
+          <th>LP</th>
+          <th>LP Change</th>
+          <th>Opp. LP</th>
+          <th>Opp. League</th>
+        </tr>
+      </thead>
+      <tbody id="matches-tbody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const CFN_ID = "Ccookie";
+
+    function fmt(n, plus = false) {
+      if (n === null || n === undefined) return "—";
+      return (plus && n > 0 ? "+" : "") + n;
+    }
+
+    function gainClass(n) {
+      if (n === null || n === undefined) return "";
+      return n >= 0 ? "gain-pos" : "gain-neg";
+    }
+
+    async function load() {
+      const res = await fetch("data.json");
+      const data = await res.json();
+      const player = data.players[CFN_ID];
+      if (!player) {
+        document.getElementById("player-name").textContent = CFN_ID + " (no data yet)";
+        return;
+      }
+
+      document.getElementById("player-name").textContent = CFN_ID;
+      document.getElementById("last-updated").textContent =
+        "Last updated: " + new Date(player.last_updated).toLocaleString();
+
+      const matches = [...player.matches].reverse(); // newest first
+      const wins = matches.filter(m => m.victory).length;
+      const losses = matches.length - wins;
+      const winrate = matches.length ? Math.round((wins / matches.length) * 100) : 0;
+      const latest = matches[0];
+
+      document.getElementById("stat-total").textContent = matches.length;
+      document.getElementById("stat-wins").textContent = wins;
+      document.getElementById("stat-losses").textContent = losses;
+      document.getElementById("stat-winrate").textContent = winrate + "%";
+      document.getElementById("stat-lp").textContent = latest ? fmt(latest.lp) : "—";
+      document.getElementById("stat-mr").textContent = latest && latest.mr ? fmt(latest.mr) : "—";
+
+      const tbody = document.getElementById("matches-tbody");
+      tbody.innerHTML = matches.map(m => `
+        <tr>
+          <td>${m.date} ${m.time}</td>
+          <td class="${m.victory ? "win" : "loss"}">${m.victory ? "WIN" : "LOSS"}</td>
+          <td>${m.character}</td>
+          <td>${m.opponent}</td>
+          <td>${m.opponent_character}</td>
+          <td>${fmt(m.lp)}</td>
+          <td class="${gainClass(m.lp_gain)}">${fmt(m.lp_gain, true)}</td>
+          <td>${fmt(m.opponent_lp)}</td>
+          <td>${m.opponent_league}</td>
+        </tr>
+      `).join("");
+    }
+
+    load().catch(e => console.error("Failed to load data:", e));
+  </script>
+</body>
+</html>
